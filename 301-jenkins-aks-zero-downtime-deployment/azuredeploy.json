@@ -2,6 +2,20 @@
   "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "eastus",
+      "metadata": {
+        "description": "Location for the resources. Currently, the managed Kubernetes service is only available in eastus,westeurope,centralus,canadacentral,canadaeast."
+      },
+      "allowedValues": [
+        "eastus",
+        "westeurope",
+        "centralus",
+        "canadacentral",
+        "canadaeast"
+      ]
+    },
     "adminUsername": {
       "type": "string",
       "defaultValue": "azureuser",
@@ -261,7 +275,7 @@
     {
       "apiVersion": "2017-08-31",
       "type": "Microsoft.ContainerService/managedClusters",
-      "location": "[resourceGroup().location]",
+      "location": "[parameters('location')]",
       "name": "[variables('aksName')]",
       "properties": {
         "kubernetesVersion": "[parameters('kubernetesVersion')]",
