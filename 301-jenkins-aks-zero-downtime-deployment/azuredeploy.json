@@ -87,10 +87,12 @@
     "vmName": "[concat(variables('resourcePrefix'), '-vm')]",
     "virtualNetworkName": "[concat(variables('resourcePrefix'), '-vnet')]",
     "vmExtensionName": "[concat(variables('resourcePrefix'), '-init')]",
+    "vmMSIExtensionName": "[concat(variables('resourcePrefix'), '-msi-ext')]",
+    "roleAssignmentId": "[guid(resourceGroup().id, deployment().name)]",
     "frontEndNSGName": "[concat(variables('resourcePrefix'), '-nsg')]",
     "aksName": "aks",
     "aksDnsPrefix": "[concat('aks', uniqueString(resourceGroup().id))]",
-    "_artifactsLocation": "https://raw.githubusercontent.com/Azure/jenkins/master",
+    "_artifactsLocation": "https://raw.githubusercontent.com/ArieShout/jenkins/aks-msi",
     "_extensionScript": "301-jenkins-aks-zero-downtime-deployment.sh",
     "_artifactsLocationSasToken": ""
   },
@@ -98,8 +100,11 @@
     {
       "type": "Microsoft.Compute/virtualMachines",
       "name": "[variables('vmName')]",
-      "apiVersion": "2016-04-30-preview",
+      "apiVersion": "2017-03-30",
       "location": "[resourceGroup().location]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
       "properties": {
         "osProfile": {
           "computerName": "[variables('vmName')]",
@@ -150,10 +155,10 @@
         {
           "type": "extensions",
           "name": "[variables('vmExtensionName')]",
-          "apiVersion": "2015-06-15",
+          "apiVersion": "2017-03-30",
           "location": "[resourceGroup().location]",
           "dependsOn": [
-            "[resourceId('Microsoft.Compute/virtualMachines', variables('vmName'))]",
+            "[resourceId('Microsoft.Authorization/roleAssignments', variables('roleAssignmentId'))]",
             "[resourceId('Microsoft.ContainerService/managedClusters', variables('aksName'))]"
           ],
           "properties": {
@@ -170,8 +175,37 @@
               "commandToExecute": "[concat('./', variables('_extensionScript'), ' --app_id \"', parameters('servicePrincipalAppId'), '\" --app_key \"', parameters('servicePrincipalAppKey'), '\" --subscription_id \"', subscription().subscriptionId, '\" --tenant_id \"', subscription().tenantId, '\" --resource_group \"', resourceGroup().name, '\" --aks_name \"', variables('aksName'), '\" --jenkins_fqdn \"', reference(variables('publicIPAddressName')).dnsSettings.fqdn, '\" --artifacts_location \"', variables('_artifactsLocation'), '\" --sas_token \"', variables('_artifactsLocationSasToken'), '\"')]"
             }
           }
+        },
+        {
+          "type": "extensions",
+          "name": "[variables('vmMSIExtensionName')]",
+          "apiVersion": "2017-03-30",
+          "location": "[resourceGroup().location]",
+          "dependsOn": [
+            "[resourceId('Microsoft.Compute/virtualMachines', variables('vmName'))]"
+          ],
+          "properties": {
+            "publisher": "Microsoft.ManagedIdentity",
+            "type": "ManagedIdentityExtensionForLinux",
+            "typeHandlerVersion": "1.0",
+            "autoUpgradeMinorVersion": true,
+            "settings": { }
+          }
         }
       ]
+    },
+    {
+      "name": "[variables('roleAssignmentId')]",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2017-05-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines/extensions', variables('vmName'), variables('vmMSIExtensionName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[concat(subscription().id, '/providers/Microsoft.Authorization/roleDefinitions/', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]",
+        "principalId": "[reference(concat('Microsoft.Compute/virtualMachines/', variables('vmName')), '2017-03-30').identity.principalId]",
+        "scope": "[resourceGroup().id]"
+      }
     },
     {
       "type": "Microsoft.Network/virtualNetworks",
