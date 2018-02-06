@@ -158,6 +158,7 @@
           "apiVersion": "2017-03-30",
           "location": "[resourceGroup().location]",
           "dependsOn": [
+            "[resourceId('Microsoft.Compute/virtualMachines', variables('vmName'))]",
             "[resourceId('Microsoft.Authorization/roleAssignments', variables('roleAssignmentId'))]",
             "[resourceId('Microsoft.ContainerService/managedClusters', variables('aksName'))]"
           ],
