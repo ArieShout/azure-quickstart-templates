@@ -72,6 +72,8 @@
         "imageId": "[resourceId('Microsoft.Compute/images', variables('baseImageName'))]",
         "jenkinsVmName": "[concat(parameters('resourceNamePrefix'), '-jenkins')]",
         "vmExtensionName": "[concat(variables('jenkinsVmName'), '-init')]",
+        "msiExtensionName": "ManagedIdentityExtensionForLinux",
+        "roleAssignmentsName": "[guid(resourceGroup().id, deployment().name)]",
         "jenkinsNic": "[concat(variables('jenkinsVmName'), '-nic')]",
         "jenkinsIp": "[concat(variables('jenkinsVmName'), '-ip')]",
         "blueVmss": "[concat(parameters('resourceNamePrefix'), '-blue')]",
@@ -99,6 +101,9 @@
             "name": "[variables('jenkinsVmName')]",
             "apiVersion": "2017-03-30",
             "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
             "properties": {
                 "osProfile": {
                     "computerName": "[variables('jenkinsVmName')]",
@@ -148,11 +153,28 @@
             "resources": [
                 {
                     "type": "extensions",
+                    "name": "[variables('msiExtensionName')]",
+                    "location": "[resourceGroup().location]",
+                    "apiVersion": "2015-06-15",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Compute/virtualMachines', variables('jenkinsVmName'))]"
+                    ],
+                    "properties": {
+                        "publisher": "Microsoft.ManagedIdentity",
+                        "type": "ManagedIdentityExtensionForLinux",
+                        "typeHandlerVersion": "1.0",
+                        "autoUpgradeMinorVersion": true,
+                        "settings": {}
+                    }
+                },
+                {
+                    "type": "extensions",
                     "name": "[variables('vmExtensionName')]",
                     "apiVersion": "2015-06-15",
                     "location": "[resourceGroup().location]",
                     "dependsOn": [
-                        "[resourceId('Microsoft.Compute/virtualMachines', variables('jenkinsVmName'))]"
+                        "[resourceId('Microsoft.Compute/virtualMachines', variables('jenkinsVmName'))]",
+                        "[resourceId('Microsoft.Authorization/roleAssignments', variables('roleAssignmentsName'))]"
                     ],
                     "properties": {
                         "publisher": "Microsoft.Azure.Extensions",
@@ -170,6 +192,19 @@
                     }
                 }
             ]
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "name": "[variables('roleAssignmentsName')]",
+            "apiVersion": "2017-05-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachines/extensions', variables('jenkinsVMName'), variables('msiExtensionName'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[concat(subscription().id, '/providers/Microsoft.Authorization/roleDefinitions/', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]",
+                "principalId": "[reference(concat(resourceId('Microsoft.Compute/virtualMachines', variables('jenkinsVmName')), '/providers/Microsoft.ManagedIdentity/Identities/default'), '2015-08-31-PREVIEW').principalId.value]",
+                "scope": "[resourceGroup().id]"
+              }
         },
         {
             "type": "Microsoft.Network/networkInterfaces",
